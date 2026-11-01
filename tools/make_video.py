@@ -157,6 +157,10 @@ def overlay_layers(idx, body, fpath):
     l1 = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(l1)
     panel(d, (16, 10, W - 16, 104), BG, alpha=225)
     d.text((TEXT_X, 18), f"Episode {idx}  |  {chip}", font=f_chip, fill=ACCENT)
+    if body.get("_hash"):
+        tag = f"記録 {body['_hash'][:12]}"
+        f_tag = font(20, fpath)
+        d.text((W - 40 - d.textlength(tag, font=f_tag), 22), tag, font=f_tag, fill=MUTED)
     d.text((TEXT_X, 52), wrap(f"指示：「{body.get('instruction', '')}」", f_main, TEXT_MAX, 1)[0],
            font=f_main, fill=FG)
 
@@ -253,7 +257,11 @@ def caption_clip(clip, layers, out, tmp):
 
 # ---------------------------------------------------------------- main
 def match_episodes(log_path, clips):
-    bodies = [json.loads(l)["body"] for l in open(log_path, encoding="utf-8") if l.strip()]
+    bodies = []
+    for l in open(log_path, encoding="utf-8"):
+        if l.strip():
+            rec = json.loads(l)
+            bodies.append(dict(rec["body"], _hash=rec["hash"]))
     # match by logged video name; tolerate renamed downloads such as "abc123-ep1_success_1.mp4"
     by_video = {pathlib.Path(b["video"]).stem: b for b in bodies if b.get("video")}   # later entries win
     matched = []
@@ -302,19 +310,19 @@ def main():
         card(lines, f, png); still_to_video(png, sec, mp4); segs.append(mp4); total += sec
 
     add_card([("Physical AI 応用1講座　最終課題", 30, MUTED),
-              ("LLMによる作業計画と安全ゲートを用いた", 50, FG),
-              ("ロボットアームの Pick & Place と検証", 50, FG),
+              ("LLMを用いたロボット作業計画における", 50, FG),
+              ("検証証跡の自動生成", 50, FG),
               (f"{args.account}　｜　Genesis / Franka Emika Panda / Claude　｜　等倍速", 26, MUTED)], 5, "c00_title")
     add_card([("背景と目的", 30, ACCENT),
               ("LLMの出力は、同一の指示に対しても一定しない。", 38, FG),
-              ("このため、LLMの出力そのものを検証対象とすることは難しい。", 38, FG),
+              ("このため、出力そのものを検証の対象とすることは難しい。", 38, FG),
               ("本課題では、LLMが作成した計画を実行前に規則ベースのゲートで検査し、", 28, MUTED),
-              ("安全要求はゲートの検証で、機能要求は試行の統計で確認する構成とした。", 28, MUTED)],
+              ("その検証結果を要求単位の証跡として、コミットごとに自動生成する。", 28, MUTED)],
              9, "c01_problem")
     add_card([("システム構成", 30, ACCENT),
               ("指示 → LLM（JSON形式の計画）→ 安全ゲート → 実行 → 判定", 38, FG),
               ("・ゲートは規則に基づいて判定し、違反には要求ID（REQ-SAF-xxx）を付す", 28, MUTED),
-              ("・全実行をハッシュチェーン付きのログに記録する", 28, MUTED),
+              ("・全実行をハッシュチェーン付きのログに記録する（字幕右上の「記録」）", 28, MUTED),
               ("・要求・テスト・結果の対応表（トレーサビリティマトリクス）をCIで生成する", 28, MUTED)],
              9, "c02_arch")
 
@@ -328,12 +336,13 @@ def main():
         png, mp4 = tmp / f"i{j:02d}.png", tmp / f"i{j:02d}.mp4"
         image_slide(src, png); still_to_video(png, float(sec), mp4); segs.append(mp4); total += float(sec)
 
-    add_card([("まとめと課題", 30, ACCENT),
-              ("安全要求（4件）はゲートで担保し、CIで継続的に検証する。", 34, FG),
-              ("機能・頑健性の要求は、試行の成功率（95%信頼区間）で判定する。", 34, FG),
-              ("課題：ゲートが検査できるのは、計画に現れる情報に限られる。", 28, MUTED),
-              ("例：存在しない「緑の箱」を赤い箱に置き換える誤りは、シナリオ評価でのみ検出できる。", 26, MUTED)],
-             9, "c99_summary")
+    add_card([("結果と課題", 30, ACCENT),
+              ("安全要求4件と記録要求1件は、単体テスト・試行とも全件合格（PASS）。", 32, FG),
+              ("ゲートの規則を1つ削除すると該当要求がFAILとなり、変更を検出できた。", 32, FG),
+              ("機能・頑健性の要求3件は、試行数が基準に満たず判定保留とした。", 32, FG),
+              ("課題：ゲートが検査できるのは、計画に現れる情報に限られる。", 26, MUTED),
+              ("今後：LLMを含む試行を増やし、統計的な要求の判定を確定させる。", 26, MUTED)],
+             10, "c99_summary")
 
     if args.ending:
         mp4 = tmp / "z99_ending.mp4"; total += normalize(args.ending, mp4); segs.append(mp4)
