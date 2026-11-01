@@ -1,0 +1,4 @@
+# CI: no simulator needed
+pytest
+pyyaml
+anthropic

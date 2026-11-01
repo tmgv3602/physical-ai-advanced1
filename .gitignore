@@ -1,0 +1,8 @@
+__pycache__/
+.ipynb_checkpoints/
+.env
+*.mp4
+results/ci/
+trace/out/
+results/sim/sim_*.json
+assets/

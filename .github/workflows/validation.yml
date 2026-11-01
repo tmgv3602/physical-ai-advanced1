@@ -1,0 +1,56 @@
+name: validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements-ci.txt
+
+      # 失敗しても止めない。合否はマトリクスが要求単位で判定する
+      - name: Unit tests (gate / planner / audit log)
+        run: pytest -q
+        continue-on-error: true
+
+      - name: Scenario eval - rule planner (deterministic baseline)
+        run: python eval/run_offline.py --planner rule
+
+      - name: Scenario eval - Claude (statistical, only if the secret is set)
+        if: ${{ env.ANTHROPIC_API_KEY != '' }}
+        run: python eval/run_offline.py --planner claude --repeats 5
+
+      - name: Ingest committed simulation logs
+        run: |
+          for f in results/sim/*.jsonl; do
+            [ -e "$f" ] && python eval/ingest_episodes.py "$f"
+          done
+          true
+
+      - name: Build traceability matrix
+        run: python trace/build_matrix.py
+
+      - name: Publish matrix to job summary
+        if: always()
+        run: cat trace/out/matrix.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-evidence-${{ github.sha }}
+          path: |
+            trace/out/
+            results/
